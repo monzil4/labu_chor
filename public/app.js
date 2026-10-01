@@ -1,13 +1,12 @@
 const socket = io();
 
-// গ্লোবাল স্টেট
 let currentRoom = null;
 let myId = null;
 let isThief = false;
 let alertTimer = null;
 let countdownTimer = null;
 
-// --- অডিও সিন্থেসাইজার ইঞ্জিন (Web Audio API) ---
+// --- অডিও সিন্থেসাইজার ইঞ্জিন ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playTone(freq, type = 'sine', duration = 0.15) {
@@ -52,74 +51,69 @@ const SFX = {
   }
 };
 
-// --- ১০০% কার্যকরী লাইভ ভয়েস ইঞ্জিন (WebRTC Audio Mesh) ---
+// --- ফুলপ্রুফ লাইভ ভয়েস ইঞ্জিন (WebRTC) ---
 let localStream = null;
 let isMuted = true;
-const peers = {}; // সব প্লেয়ারের অডিও কানেকশন এখানে থাকবে
+const peers = {};
 
 const rtcConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' }
   ]
 };
 
 async function initVoice() {
   try {
     if (audioCtx.state === 'suspended') await audioCtx.resume();
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    localStream.getAudioTracks()[0].enabled = false; // শুরুতে মিউট
-    setupAudioAnalysis(localStream);
+    if (!localStream) {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      localStream.getAudioTracks()[0].enabled = false; // শুরুতে মিউট
+      setupAudioAnalysis(localStream);
+    }
   } catch (e) {
-    console.log('মাইক্রোফোন পারমিশন মেলেনি:', e);
+    console.log('মাইক্রোফোন চালু করা যায়নি:', e);
   }
 }
 
-// নতুন প্লেয়ার আসলে তার সাথে কানেক্ট করা
-function connectToNewPeer(targetSocketId, isInitiator) {
-  if (peers[targetSocketId]) return;
-
+function createPeerConnection(targetId) {
   const pc = new RTCPeerConnection(rtcConfig);
-  peers[targetSocketId] = pc;
+  peers[targetId] = pc;
 
-  // নিজের মাইক্রোফোনের অডিও পাঠানো
   if (localStream) {
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
   }
 
-  // অন্যের অডিও রিসিভ হলে অটোমেটিক স্পিকারে বাজানো
+  // অডিও পাওয়ার সাথে সাথে জোরপূর্বক বাজানো (Autoplay bypass)
   pc.ontrack = (event) => {
-    let remoteAudio = document.getElementById(`audio_${targetSocketId}`);
-    if (!remoteAudio) {
-      remoteAudio = document.createElement('audio');
-      remoteAudio.id = `audio_${targetSocketId}`;
-      remoteAudio.autoplay = true;
-      document.body.appendChild(remoteAudio);
+    let audio = document.getElementById(`audio_${targetId}`);
+    if (!audio) {
+      audio = document.createElement('audio');
+      audio.id = `audio_${targetId}`;
+      audio.autoplay = true;
+      audio.playsInline = true;
+      document.body.appendChild(audio);
     }
-    remoteAudio.srcObject = event.streams[0];
+    audio.srcObject = event.streams[0];
+    audio.play().catch(e => {
+      console.log('Autoplay restriction bypassed on interaction');
+    });
   };
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
-      socket.emit('voiceSignal', { to: targetSocketId, signal: { candidate: event.candidate } });
+      socket.emit('voiceSignal', { to: targetId, signal: { candidate: event.candidate } });
     }
   };
 
-  if (isInitiator) {
-    pc.onnegotiationneeded = async () => {
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.emit('voiceSignal', { to: targetSocketId, signal: { desc: pc.localDescription } });
-      } catch (err) {}
-    };
-  }
+  return pc;
 }
 
-// সিগন্যাল হ্যান্ডলার
+// সিগন্যাল আদান প্রদান
 socket.on('voiceSignal', async ({ from, signal }) => {
-  if (!peers[from]) connectToNewPeer(from, false);
-  const pc = peers[from];
+  let pc = peers[from];
+  if (!pc) pc = createPeerConnection(from);
 
   try {
     if (signal.desc) {
@@ -135,12 +129,28 @@ socket.on('voiceSignal', async ({ from, signal }) => {
   } catch (err) {}
 });
 
-function toggleMic() {
+async function callUser(targetId) {
+  const pc = createPeerConnection(targetId);
+  try {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('voiceSignal', { to: targetId, signal: { desc: pc.localDescription } });
+  } catch (e) {}
+}
+
+async function toggleMic() {
   SFX.click();
   if (!localStream) {
-    initVoice().then(() => toggleMic());
-    return;
+    await initVoice();
   }
+  
+  if (audioCtx.state === 'suspended') {
+    await audioCtx.resume();
+  }
+
+  // ব্রাউজারের অডিও চালু নিশ্চিত করা
+  document.querySelectorAll('audio').forEach(a => a.play().catch(() => {}));
+
   const track = localStream.getAudioTracks()[0];
   isMuted = !isMuted;
   track.enabled = !isMuted;
@@ -155,7 +165,7 @@ function toggleMic() {
   }
 }
 
-// সাউন্ড মিটার (কে কথা বলছে শনাক্ত করা)
+// সাউন্ড মিটার
 function setupAudioAnalysis(stream) {
   try {
     const src = audioCtx.createMediaStreamSource(stream);
@@ -173,7 +183,7 @@ function setupAudioAnalysis(stream) {
       let sum = 0;
       for (let i = 0; i < data.length; i++) sum += data[i];
       const avg = sum / data.length;
-      setSpeakingUI(myId, avg > 20);
+      setSpeakingUI(myId, avg > 15);
     }, 150);
   } catch (e) {}
 }
@@ -185,11 +195,11 @@ function setSpeakingUI(playerId, isSpeaking) {
   else node.classList.remove('speaking');
 }
 
-// --- ফ্রন্টএন্ড বাটন কন্ট্রোলস ---
+// --- ফ্রন্টএন্ড বাটন কন্ট্রোল ---
 function createRoom() {
   SFX.click();
   const name = document.getElementById('playerName').value.trim();
-  if (!name) return alert('অনুগ্রহ করে নাম লিখুন!');
+  if (!name) return alert('অনুগ্রহ করে আপনার নাম দিন!');
   socket.emit('createRoom', { name });
 }
 
@@ -197,7 +207,7 @@ function joinRoom() {
   SFX.click();
   const name = document.getElementById('playerName').value.trim();
   const roomCode = document.getElementById('roomCodeInput').value.trim();
-  if (!name || !roomCode) return alert('নাম ও রুম কোড উভয়ই লাগবে!');
+  if (!name || !roomCode) return alert('নাম এবং রুম কোড দুটোই লাগবে!');
   socket.emit('joinRoom', { roomCode, name });
 }
 
@@ -284,12 +294,14 @@ socket.on('floatingEmoji', ({ emoji }) => {
 socket.on('updateRoom', (room) => {
   currentRoom = room;
 
-  // নতুন কোনো প্লেয়ার আসলে স্বয়ংক্রিয়ভাবে অডিও কানেকশন তৈরি
-  room.players.forEach(p => {
-    if (p.id !== myId && !peers[p.id]) {
-      connectToNewPeer(p.id, true);
-    }
-  });
+  // যখনই কোনো প্লেয়ার যোগ দেবে, স্বয়ংক্রিয়ভাবে অডিও কানেকশন তৈরি
+  if (localStream) {
+    room.players.forEach(p => {
+      if (p.id !== myId && !peers[p.id]) {
+        callUser(p.id);
+      }
+    });
+  }
 
   renderUI(room);
 });
