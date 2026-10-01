@@ -3,156 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>🍋 লেবু চোর - The Ultimate Social Game</title>
+  <title>🍋 লেবু চোর - 3D Social Game</title>
+  <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
-  <style>
-    :root {
-      --bg: #070b14;
-      --panel: #131c2e;
-      --lemon: #facc15;
-      --lemon-dark: #ca8a04;
-      --danger: #ef4444;
-      --success: #10b981;
-      --accent: #38bdf8;
-      --text: #f8fafc;
-      --border: #24324d;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body { background: radial-gradient(circle at top, #1e293b, var(--bg)); color: var(--text); min-height: 100vh; display: flex; justify-content: center; padding: 12px; }
-    .container { width: 100%; max-width: 620px; display: flex; flex-direction: column; gap: 14px; position: relative; }
-
-    /* গ্লোবাল ট্রল পপ-আপ ব্যানার (সবার স্ক্রিনের উপর ভেসে উঠবে) */
-    #globalAlert {
-      position: fixed;
-      top: 25px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #b91c1c;
-      color: #ffffff;
-      padding: 16px 28px;
-      border-radius: 40px;
-      font-weight: 900;
-      font-size: 16px;
-      box-shadow: 0 10px 40px rgba(239, 68, 68, 0.8), 0 0 15px rgba(255,255,255,0.4);
-      border: 3px solid #fecaca;
-      z-index: 999999 !important;
-      display: none;
-      text-align: center;
-      width: 90%;
-      max-width: 480px;
-    }
-
-    /* স্থায়ী লাইভ স্কোরবোর্ড টেবিল */
-    .table-card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
-    th { color: var(--lemon); border-bottom: 2px solid var(--border); padding: 8px; font-weight: bold; }
-    td { padding: 10px 8px; border-bottom: 1px solid #1a263d; }
-
-    /* এরিনা বোর্ড */
-    .board-card { background: var(--panel); border-radius: 24px; border: 1px solid var(--border); padding: 22px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
-    
-    .arena-circle {
-      position: relative;
-      width: 320px;
-      height: 320px;
-      margin: 16px auto;
-      border-radius: 50%;
-      border: 2px dashed #334155;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .center-wheel {
-      width: 105px;
-      height: 105px;
-      border-radius: 50%;
-      border: 5px dashed var(--lemon);
-      background: radial-gradient(circle, #facc15 20%, #ca8a04 80%);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 36px;
-      box-shadow: 0 0 25px rgba(250, 204, 21, 0.4);
-    }
-    .spinning { animation: spin 2.5s infinite linear; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-    /* বৃত্তাকার প্লেয়ার নোড */
-    .player-node {
-      position: absolute;
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      background: #0d1527;
-      border: 2px solid #475569;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      font-size: 11px;
-      font-weight: bold;
-      transform: translate(-50%, -50%);
-      cursor: pointer;
-      user-select: none;
-      transition: all 0.3s ease;
-    }
-    .player-node.active-turn { 
-      border-color: var(--accent); 
-      box-shadow: 0 0 20px var(--accent); 
-      transform: translate(-50%, -50%) scale(1.18); 
-    }
-    .player-node.got-target { 
-      border-color: var(--lemon); 
-      background: #3a2e05; 
-      box-shadow: 0 0 20px var(--lemon); 
-    }
-
-    .prediction-tag { font-size: 10px; color: var(--accent); position: absolute; bottom: -20px; width: 100px; text-align: center; }
-
-    input { width: 100%; padding: 13px; border-radius: 12px; border: 2px solid var(--border); background: #0b1120; color: white; margin: 8px 0; outline: none; font-size: 15px; }
-    input:focus { border-color: var(--lemon); }
-    button { width: 100%; padding: 13px; border-radius: 12px; border: none; font-size: 15px; font-weight: bold; cursor: pointer; background: var(--lemon); color: #000; margin-top: 6px; transition: 0.2s; }
-    button:active { transform: scale(0.97); }
-    button.secondary { background: #24324d; color: white; }
-    button.danger { background: var(--danger); color: white; }
-    .hidden { display: none !important; }
-    .interactive-card { background: #0b1120; border: 1px solid var(--accent); border-radius: 14px; padding: 14px; margin-top: 14px; }
-
-    /* ইশারা পাওয়ার স্পেশাল ইনফো ব্যানার */
-    .got-gesture-alert {
-      background: rgba(250, 204, 21, 0.15);
-      border: 2px solid var(--lemon);
-      color: var(--lemon);
-      padding: 12px;
-      border-radius: 12px;
-      font-weight: bold;
-      margin-bottom: 12px;
-      font-size: 15px;
-      animation: pulse 1s infinite alternate;
-    }
-    @keyframes pulse { from { opacity: 0.7; } to { opacity: 1; } }
-  </style>
+  <!-- ক্যানভাস কনফেটি লাইব্রেরি (ম্যাচ শেষে সেলিব্রেশনের জন্য) -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
 
 <!-- গ্লোবাল ট্রল ব্যানার -->
 <div id="globalAlert"></div>
 
-<div class="container">
+<div class="container" id="mainApp">
 
-  <!-- লাইভ স্কোরবোর্ড টেবিল -->
-  <div class="table-card hidden" id="topScoreboardCard">
-    <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-      <span style="font-weight:bold; color:var(--lemon); font-size: 16px;">🏆 লাইভ স্কোরবোর্ড</span>
-      <span style="font-size: 13px; color: #94a3b8;">রুম কোড: <b id="codeBadge" style="color:var(--accent);"></b></span>
+  <!-- টপ বার: ভয়েস কন্ট্রোল ও রুম ইনফো -->
+  <div class="top-nav hidden" id="topNav">
+    <div class="room-pill">রুম কোড: <span id="codeBadge">----</span></div>
+    <div class="voice-dock">
+      <button class="icon-btn" id="micBtn" onclick="toggleMic()">🎙️ মাইক অফ</button>
+    </div>
+  </div>
+
+  <!-- লাইভ লিডারবোর্ড টেবিল -->
+  <div class="glass-panel hidden" id="topScoreboardCard">
+    <div style="display:flex; justify-content:space-between; margin-bottom: 6px;">
+      <span style="font-weight:bold; color:var(--lemon); font-size:15px;">🏆 লাইভ লিডারবোর্ড</span>
     </div>
     <table>
       <thead>
         <tr>
           <th>প্লেয়ার</th>
-          <th>পয়েন্ট</th>
+          <th>পয়েন্ট</th>
           <th>বর্তমান অবস্থা</th>
         </tr>
       </thead>
@@ -160,290 +41,76 @@
     </table>
   </div>
 
-  <!-- ১. লগইন স্ক্রিন -->
-  <div class="board-card" id="homeScreen">
-    <h1 style="color:var(--lemon); margin-bottom: 8px; font-size: 32px;">🍋 লেবু চোর</h1>
-    <p style="color:#94a3b8; font-size:14px; margin-bottom:14px;">কে চোর, আর কে দিল ইশারা? রহস্যভেদের খেলা!</p>
-    <input type="text" id="playerName" placeholder="আপনার নাম লিখুন...">
-    <button onclick="createRoom()">নতুন রুম তৈরি করুন (Host)</button>
-    <div style="margin: 10px 0; color:#64748b;">— অথবা —</div>
-    <input type="text" id="roomCodeInput" placeholder="৪ অক্ষরের কোড দিন..." style="text-transform: uppercase;">
-    <button class="secondary" onclick="joinRoom()">রুমে প্রবেশ করুন</button>
+  <!-- ১. হোম স্ক্রিন -->
+  <div class="glass-panel" id="homeScreen">
+    <div style="font-size: 50px; margin-bottom: 6px;">🍋</div>
+    <h1 style="color:var(--lemon); font-size:32px; font-weight:800; text-shadow: 0 0 20px var(--glow);">লেবু চোর</h1>
+    <p style="color:#94a3b8; font-size:14px; margin-bottom:16px;">কে চোর, আর কে দিল ইশারা? রহস্যভেদের আসল আড্ডা!</p>
+    
+    <input type="text" id="playerName" placeholder="আপনার নাম লিখুন..." maxlength="12">
+    <button class="btn-3d btn-primary" onclick="createRoom()">নতুন রুম তৈরি করুন (Host)</button>
+    
+    <div style="margin: 12px 0; color:#64748b; font-size:13px;">— অথবা কোড দিয়ে যোগ দিন —</div>
+    
+    <input type="text" id="roomCodeInput" placeholder="৪ অক্ষরের রুম কোড..." style="text-transform: uppercase;" maxlength="4">
+    <button class="btn-3d btn-secondary" onclick="joinRoom()">রুমে প্রবেশ করুন</button>
   </div>
 
   <!-- ২. মূল এরিনা বোর্ড -->
-  <div class="board-card hidden" id="gameArenaScreen">
+  <div class="glass-panel hidden" id="gameArenaScreen">
     
+    <!-- সার্কুলার এরিনা -->
     <div class="arena-circle" id="arenaCircle">
+      <svg id="laserSvg" class="laser-layer"></svg>
       <div class="center-wheel" id="centerWheel">🍋</div>
     </div>
 
-    <!-- ইশারা পাওয়া ব্যক্তির বিশেষ বার্তা -->
-    <div id="gestureReceivedBox" class="got-gesture-alert hidden"></div>
+    <!-- ১৫ সেকেন্ডের কাউন্টডাউন টাইমার -->
+    <div id="turnTimer" class="timer-badge hidden">⏳ <span id="timerSeconds">15</span>s</div>
 
-    <div id="statusInstruction" style="font-size:15px; font-weight:bold; min-height: 38px; color: var(--accent);">
+    <!-- ইশারা নোটিস (শুধুমাত্র টার্গেট দেখতে পাবে) -->
+    <div id="gestureReceivedBox" style="background:rgba(250,204,21,0.2); border:2px solid var(--lemon); color:var(--lemon); padding:10px; border-radius:12px; font-weight:bold; margin-bottom:10px;" class="hidden"></div>
+
+    <!-- স্ট্যাটাস টেক্সট -->
+    <div id="statusInstruction" style="font-size:15px; font-weight:bold; min-height:38px; color:var(--accent);">
       লবিতে অপেক্ষা করা হচ্ছে...
     </div>
 
+    <!-- অ্যাকশন কন্ট্রোলস -->
     <div id="actionArea">
-      <button id="startGameBtn" class="hidden" onclick="startGame()">গেম শুরু করুন (হুইল ঘোরান) 🚀</button>
+      <button id="startGameBtn" class="btn-3d btn-primary hidden" onclick="startGame()">গেম শুরু করুন (হুইল ঘোরান) 🚀</button>
       
-      <!-- ইশারা কনফার্ম বাটন -->
-      <button id="claimGestureBtn" class="secondary hidden" style="border: 2px solid var(--lemon);" onclick="claimGesture()">
+      <button id="claimGestureBtn" class="btn-3d btn-warning hidden" onclick="claimGesture()">
         👉 আমি ইশারা পেয়েছি!
       </button>
 
-      <!-- সিলেকশন বক্স -->
-      <div id="selectionBox" class="interactive-card hidden">
-        <p id="selectionTitle" style="color:var(--lemon); font-weight:bold; margin-bottom:8px;"></p>
+      <div id="selectionBox" class="hidden" style="background:#0b1120; border:1px solid var(--accent); border-radius:14px; padding:12px; margin-top:10px;">
+        <div id="selectionTitle" style="color:var(--lemon); font-weight:bold; margin-bottom:8px; font-size:14px;"></div>
         <div id="selectionButtons" style="display:flex; flex-direction:column; gap:6px;"></div>
       </div>
     </div>
   </div>
 
+  <!-- ৩. ম্যাচ ওভার ফাইনাল ট্রফি স্ক্রিন -->
+  <div class="glass-panel hidden" id="matchEndedScreen">
+    <div style="font-size: 60px; margin-bottom: 8px;">🏆</div>
+    <h1 style="color:var(--lemon); font-size:30px; margin-bottom:10px;">খেলা সমাপ্ত!</h1>
+    <div id="winnerPodium" style="margin: 18px 0;"></div>
+    <button class="btn-3d btn-primary" onclick="location.reload()">হোমে ফিরে যান</button>
+  </div>
+
+  <!-- ফ্লোটিং ইমোজি ডক (স্ক্রিনের নিচে ভাসমান) -->
+  <div class="emoji-dock hidden" id="emojiDock">
+    <button class="emoji-btn" onclick="sendEmoji('😂')">😂</button>
+    <button class="emoji-btn" onclick="sendEmoji('🍋')">🍋</button>
+    <button class="emoji-btn" onclick="sendEmoji('🕵️')">🕵️</button>
+    <button class="emoji-btn" onclick="sendEmoji('🤫')">🤫</button>
+    <button class="emoji-btn" onclick="sendEmoji('🔥')">🔥</button>
+  </div>
+
 </div>
 
-<script>
-  const socket = io();
-  let currentRoom = null;
-  let myId = null;
-  let isThief = false;
-  let alertTimer = null;
-
-  function createRoom() {
-    const name = document.getElementById('playerName').value.trim();
-    if (!name) return alert('অনুগ্রহ করে আপনার নাম দিন!');
-    socket.emit('createRoom', { name });
-  }
-
-  function joinRoom() {
-    const name = document.getElementById('playerName').value.trim();
-    const roomCode = document.getElementById('roomCodeInput').value.trim();
-    if (!name || !roomCode) return alert('নাম এবং রুম কোড দুটোই লাগবে!');
-    socket.emit('joinRoom', { roomCode, name });
-  }
-
-  function startGame() {
-    socket.emit('startGame', { roomCode: currentRoom.code });
-  }
-
-  function claimGesture() {
-    socket.emit('claimGesture', { roomCode: currentRoom.code });
-  }
-
-  function selectTarget(targetId) {
-    socket.emit('selectTarget', { roomCode: currentRoom.code, targetId });
-    alert('টার্গেট নিশ্চিত হয়েছে! এবার বাস্তবে তাকে ইশারা দিন!');
-  }
-
-  function submitPrediction(suspectId) {
-    socket.emit('submitPrediction', { roomCode: currentRoom.code, suspectId });
-  }
-
-  function submitFinalVerdict(accusedId) {
-    socket.emit('submitFinalVerdict', { roomCode: currentRoom.code, accusedId });
-  }
-
-  function nextRound() {
-    socket.emit('nextRound', { roomCode: currentRoom.code });
-  }
-
-  socket.on('roomJoined', ({ roomCode, myId: id }) => myId = id);
-  socket.on('roleAssigned', (data) => isThief = data.isThief);
-  socket.on('errorMsg', (msg) => alert(msg));
-
-  // 🍋 চোর ইশারা দিলে টার্গেটের ফোনে স্পষ্ট বার্তা আসবে কে ইশারা দিল
-  socket.on('youGotGesture', ({ thiefName }) => {
-    const gBox = document.getElementById('gestureReceivedBox');
-    gBox.innerHTML = `🍋 আপনাকে <b>${thiefName}</b> ইশারা দিয়েছে! নিশ্চিত করতে নিচের বাটনে চাপুন!`;
-    gBox.classList.remove('hidden');
-  });
-
-  // 🚨 সবার ফোনে ট্রল ব্যানার দেখানোর হ্যান্ডেলার
-  socket.on('globalFakeWarning', ({ blufferName }) => {
-    const alertBox = document.getElementById('globalAlert');
-    alertBox.innerHTML = `🚨 <b>${blufferName}</b> ভং ধরছে! সে কোনো ইশারা পায়নি! 😂`;
-    alertBox.style.display = 'block';
-
-    if (alertTimer) clearTimeout(alertTimer);
-    alertTimer = setTimeout(() => {
-      alertBox.style.display = 'none';
-    }, 3500);
-  });
-
-  socket.on('updateRoom', (room) => {
-    currentRoom = room;
-    renderUI(room);
-  });
-
-  function renderUI(room) {
-    document.getElementById('homeScreen').classList.add('hidden');
-    document.getElementById('topScoreboardCard').classList.remove('hidden');
-    document.getElementById('gameArenaScreen').classList.remove('hidden');
-    document.getElementById('codeBadge').innerText = room.code;
-
-    // ইশারা পর্ব পার হলে নোটিস মুছে ফেলা
-    if (room.status !== 'GESTURE') {
-      document.getElementById('gestureReceivedBox').classList.add('hidden');
-    }
-
-    // ১. লাইভ স্কোরবোর্ড টেবিল
-    const tbody = document.getElementById('scoreTableBody');
-    tbody.innerHTML = room.players.map(p => {
-      let state = 'অপেক্ষারত';
-      if (room.status === 'PREDICTION_PHASE') {
-        const curTurnId = room.turnOrder[room.currentTurnIndex];
-        if (p.id === curTurnId) state = '👉 অনুমান করছে...';
-        else if (room.predictions[p.id]) state = `সন্দেহ: ${room.predictions[p.id].suspectName}`;
-      } else if (p.id === room.targetId && room.status !== 'GESTURE') {
-        state = '🍋 ইশারা পেয়েছে';
-      }
-      return `
-        <tr>
-          <td><b>${p.name}</b> ${p.id === myId ? '(আপনি)' : ''}</td>
-          <td style="color:var(--lemon); font-weight:bold; font-size:15px;">${p.score}</td>
-          <td style="font-size:12px; color:#38bdf8;">${state}</td>
-        </tr>
-      `;
-    }).join('');
-
-    // ২. সার্কেল ড্রয়িং
-    const circle = document.getElementById('arenaCircle');
-    circle.querySelectorAll('.player-node').forEach(el => el.remove());
-
-    const total = room.players.length;
-    const radius = 120;
-
-    room.players.forEach((p, idx) => {
-      const angle = (idx / total) * (2 * Math.PI) - (Math.PI / 2);
-      const x = 160 + radius * Math.cos(angle);
-      const y = 160 + radius * Math.sin(angle);
-
-      const node = document.createElement('div');
-      node.className = 'player-node';
-      node.style.left = `${x}px`;
-      node.style.top = `${y}px`;
-
-      if (room.targetId && p.id === room.targetId && room.status !== 'GESTURE') {
-        node.classList.add('got-target');
-      }
-
-      const activeTurnId = (room.status === 'PREDICTION_PHASE') ? room.turnOrder[room.currentTurnIndex] : null;
-      if (p.id === activeTurnId) {
-        node.classList.add('active-turn');
-      }
-
-      let predText = '';
-      if (room.predictions[p.id]) {
-        predText = `<div class="prediction-tag">👉 ${room.predictions[p.id].suspectName}</div>`;
-      }
-
-      // সার্কেল নোডে ক্লিক করে সিলেক্ট করার সুবিধা
-      node.onclick = () => {
-        if (room.status === 'GESTURE' && isThief && p.id !== myId) {
-          selectTarget(p.id);
-        } else if (room.status === 'PREDICTION_PHASE' && activeTurnId === myId && p.id !== myId) {
-          submitPrediction(p.id);
-        } else if (room.status === 'FINAL_VERDICT' && room.targetId === myId && p.id !== myId) {
-          submitFinalVerdict(p.id);
-        }
-      };
-
-      node.innerHTML = `<span>${p.name}</span>${predText}`;
-      circle.appendChild(node);
-    });
-
-    // ৩. অ্যাকশন কন্ট্রোলস
-    const instr = document.getElementById('statusInstruction');
-    const startBtn = document.getElementById('startGameBtn');
-    const claimBtn = document.getElementById('claimGestureBtn');
-    const selBox = document.getElementById('selectionBox');
-    const selTitle = document.getElementById('selectionTitle');
-    const selBtns = document.getElementById('selectionButtons');
-    const wheel = document.getElementById('centerWheel');
-
-    startBtn.classList.add('hidden');
-    claimBtn.classList.add('hidden');
-    selBox.classList.add('hidden');
-    selBtns.innerHTML = '';
-
-    if (room.status === 'LOBBY') {
-      instr.innerText = `লবি: খেলোয়াড় সংখ্যা (${room.players.length}/৩+)`;
-      wheel.classList.remove('spinning');
-      if (room.hostId === myId) startBtn.classList.remove('hidden');
-    }
-    else if (room.status === 'WHEEL_SPINNING') {
-      instr.innerText = 'চোর নির্বাচন চলছে... ভাগ্যের চাকা ঘুরছে!';
-      wheel.classList.add('spinning');
-    }
-    else if (room.status === 'GESTURE') {
-      wheel.classList.remove('spinning');
-      claimBtn.classList.remove('hidden');
-
-      if (isThief) {
-        instr.innerText = '🍋 আপনি লেবু চোর! কাউকে বাস্তবে ইশারা দিয়ে নিচে তাকে সিলেক্ট করুন:';
-        selBox.classList.remove('hidden');
-        selTitle.innerText = 'কাকে ইশারা দিয়েছেন? সিলেক্ট করুন:';
-        selBtns.innerHTML = room.players.filter(p => p.id !== myId).map(p => `
-          <button class="secondary" onclick="selectTarget('${p.id}')">👉 ${p.name}</button>
-        `).join('');
-      } else {
-        instr.innerText = 'ইশারা পর্ব চলছে! কেউ ইশারা দিলে বাটনে চাপুন...';
-      }
-    }
-    else if (room.status === 'PREDICTION_PHASE') {
-      wheel.classList.remove('spinning');
-      const activeId = room.turnOrder[room.currentTurnIndex];
-      const activePlayer = room.players.find(p => p.id === activeId);
-
-      if (activeId === myId) {
-        instr.innerText = '🎯 আপনার পালা! কাকে চোর মনে হচ্ছে সিলেক্ট করুন:';
-        selBox.classList.remove('hidden');
-        selTitle.innerText = 'সন্দেহভাজন বেছে নিন:';
-        selBtns.innerHTML = room.players.filter(p => p.id !== myId).map(p => `
-          <button class="secondary" onclick="submitPrediction('${p.id}')">🕵️ ${p.name}</button>
-        `).join('');
-      } else {
-        instr.innerText = `${activePlayer?.name} এখন অনুমান করছে... অপেক্ষা করুন।`;
-      }
-    }
-    else if (room.status === 'FINAL_VERDICT') {
-      wheel.classList.remove('spinning');
-      const target = room.players.find(p => p.id === room.targetId);
-      if (room.targetId === myId) {
-        instr.innerText = 'সবার অনুমান শেষ! আপনার চূড়ান্ত রায় দিন: আসল চোর কে?';
-        selBox.classList.remove('hidden');
-        selTitle.innerText = 'চূড়ান্ত রায় (আসল চোর):';
-        selBtns.innerHTML = room.players.filter(p => p.id !== myId).map(p => `
-          <button class="danger" onclick="submitFinalVerdict('${p.id}')">🍋 ${p.name} আসল চোর!</button>
-        `).join('');
-      } else {
-        instr.innerText = `${target?.name} এখন চূড়ান্ত রায় দিচ্ছে...`;
-      }
-    }
-    else if (room.status === 'ROUND_OVER') {
-      wheel.classList.remove('spinning');
-      const res = room.lastRoundResult;
-      
-      let summary = `রাউন্ড শেষ! লেবু চোর ছিল <b style="color:var(--danger);">${res.thiefName}</b>।<br/>`;
-      summary += `<span style="color:var(--success);">🎯 ${res.targetName} সঠিক চোর চিহ্নিত করে ১০ পয়েন্ট পেয়েছে!</span>`;
-      
-      if (res.thiefGotPoints) {
-        summary += `<br/><span style="color:var(--lemon);">😈 চোর সাধারণদের ফাঁকি দিয়ে ১০ পয়েন্ট পেয়েছে!</span>`;
-      } else {
-        summary += `<br/><span style="color:var(--accent);">👏 সবাই চোরকে ধরতে পেরেছে! চোর ০ পয়েন্ট পেয়েছে!</span>`;
-      }
-
-      instr.innerHTML = summary;
-      
-      if (room.hostId === myId) {
-        selBox.classList.remove('hidden');
-        selTitle.innerText = 'পরবর্তী রাউন্ড:';
-        selBtns.innerHTML = `<button onclick="nextRound()" style="background:var(--success); color:white;">🚀 পরবর্তী রাউন্ড শুরু করুন</button>`;
-      }
-    }
-  }
-</script>
-
+<!-- স্ক্রিপ্ট লোড -->
+<script src="app.js"></script>
 </body>
 </html>
