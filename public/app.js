@@ -50,7 +50,7 @@ const SFX = {
   }
 };
 
-// ফ্রন্টএন্ড অ্যাকশনস
+// ফ্রন্টএন্ড বাটন
 function createRoom() {
   SFX.click();
   const name = document.getElementById('playerName').value.trim();
@@ -119,7 +119,7 @@ socket.on('floatingEmoji', ({ emoji }) => {
   setTimeout(() => el.remove(), 2000);
 });
 
-// লাইভ চ্যাট
+// চ্যাটবক্স টগল
 function toggleChat() {
   SFX.click();
   const win = document.getElementById('chatWindow');
@@ -200,7 +200,6 @@ socket.on('updateRoom', (room) => {
   renderUI(room);
 });
 
-// UI রেন্ডার
 function renderUI(room) {
   document.getElementById('homeScreen').classList.add('hidden');
   document.getElementById('topNav').classList.remove('hidden');
@@ -418,64 +417,58 @@ function showMatchOverScreen(room) {
   `;
 }
 
-// --- ফ্লোটিং ড্র্যাগেবল চ্যাটবক্স ইঞ্জিন ---
-(function makeChatDraggable() {
+// ফ্লোটিং ড্র্যাগেবল চ্যাটবক্স (হেডার ছাড়াও যেকোনো বর্ডার দিয়ে টানা যাবে)
+(function initDraggableChat() {
   const chatWin = document.getElementById('chatWindow');
   const chatHeader = chatWin.querySelector('.chat-header');
 
   let isDragging = false;
-  let currentX, currentY, initialX, initialY;
-  let xOffset = 0, yOffset = 0;
+  let startX, startY, initialLeft, initialTop;
 
-  function dragStart(e) {
-    if (e.target.tagName.toLowerCase() === 'span' && e.target.innerText === '✖') return;
+  function onStart(e) {
+    if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button' || e.target.innerText === '✖') return;
 
-    if (e.type === "touchstart") {
-      initialX = e.touches[0].clientX - xOffset;
-      initialY = e.touches[0].clientY - yOffset;
-    } else {
-      initialX = e.clientX - xOffset;
-      initialY = e.clientY - yOffset;
-    }
+    isDragging = true;
+    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
 
-    if (e.target === chatHeader || chatHeader.contains(e.target)) {
-      isDragging = true;
-    }
+    startX = clientX;
+    startY = clientY;
+
+    const rect = chatWin.getBoundingClientRect();
+    initialLeft = rect.left;
+    initialTop = rect.top;
+
+    chatWin.style.bottom = 'auto';
+    chatWin.style.right = 'auto';
+    chatWin.style.left = `${initialLeft}px`;
+    chatWin.style.top = `${initialTop}px`;
   }
 
-  function drag(e) {
+  function onMove(e) {
     if (!isDragging) return;
     e.preventDefault();
 
-    if (e.type === "touchmove") {
-      currentX = e.touches[0].clientX - initialX;
-      currentY = e.touches[0].clientY - initialY;
-    } else {
-      currentX = e.clientX - initialX;
-      currentY = e.clientY - initialY;
-    }
+    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
 
-    xOffset = currentX;
-    yOffset = currentY;
+    const dx = clientX - startX;
+    const dy = clientY - startY;
 
-    setTranslate(currentX, currentY, chatWin);
+    chatWin.style.left = `${initialLeft + dx}px`;
+    chatWin.style.top = `${initialTop + dy}px`;
   }
 
-  function dragEnd() {
-    initialX = currentX;
-    initialY = currentY;
+  function onEnd() {
     isDragging = false;
   }
 
-  function setTranslate(xPos, yPos, el) {
-    el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
-  }
+  chatHeader.addEventListener('mousedown', onStart);
+  chatHeader.addEventListener('touchstart', onStart, { passive: false });
 
-  chatHeader.addEventListener("touchstart", dragStart, { passive: false });
-  document.addEventListener("touchmove", drag, { passive: false });
-  document.addEventListener("touchend", dragEnd, { passive: false });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive: false });
 
-  chatHeader.addEventListener("mousedown", dragStart);
-  document.addEventListener("mousemove", drag);
-  document.addEventListener("mouseup", dragEnd);
+  document.addEventListener('mouseup', onEnd);
+  document.addEventListener('touchend', onEnd);
 })();
