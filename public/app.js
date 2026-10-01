@@ -6,9 +6,8 @@ let isThief = false;
 let alertTimer = null;
 let countdownTimer = null;
 
-// --- অডিও সিন্থেসাইজার ইঞ্জিন (SFX) ---
+// সাউন্ড এফএক্স
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
 function playTone(freq, type = 'sine', duration = 0.15) {
   try {
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -51,11 +50,11 @@ const SFX = {
   }
 };
 
-// --- ফ্রন্টএন্ড বাটন কন্ট্রোলস ---
+// বাটন ফাংশন
 function createRoom() {
   SFX.click();
   const name = document.getElementById('playerName').value.trim();
-  if (!name) return alert('অনুগ্রহ করে আপনার নাম দিন!');
+  if (!name) return alert('অনুগ্রহ করে নাম লিখুন!');
   socket.emit('createRoom', { name });
 }
 
@@ -63,7 +62,7 @@ function joinRoom() {
   SFX.click();
   const name = document.getElementById('playerName').value.trim();
   const roomCode = document.getElementById('roomCodeInput').value.trim();
-  if (!name || !roomCode) return alert('নাম এবং রুম কোড দুটোই লাগবে!');
+  if (!name || !roomCode) return alert('নাম ও কোড দুটোই লাগবে!');
   socket.emit('joinRoom', { roomCode, name });
 }
 
@@ -100,14 +99,51 @@ function nextRound() {
 
 function endMatch() {
   SFX.click();
-  socket.emit('endMatch', { roomCode: currentRoom.code });
+  if (confirm('আপনি কি নিশ্চিত যে সম্পূর্ণ খেলা সমাপ্ত করতে চান?')) {
+    socket.emit('endMatch', { roomCode: currentRoom.code });
+  }
 }
 
+// সাইড ফ্লোটিং ইমোজি (ডান বা বাঁ সাইড দিয়ে উঠবে, লেখার ওপর না)
 function sendEmoji(emoji) {
   socket.emit('sendEmoji', { roomCode: currentRoom.code, emoji });
 }
 
-// --- সকেট ইভেন্টস ---
+socket.on('floatingEmoji', ({ emoji }) => {
+  const el = document.createElement('div');
+  el.className = 'flying-emoji';
+  el.innerText = emoji;
+  // স্ক্রিনের বাঁ পাশ (৫-১৫%) অথবা ডান পাশ (৮৫-৯৫%) দিয়ে উঠবে
+  const isLeft = Math.random() > 0.5;
+  el.style.left = isLeft ? `${Math.random() * 10 + 5}%` : `${Math.random() * 10 + 85}%`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2000);
+});
+
+// লাইভ চ্যাট কন্ট্রোল
+function toggleChat() {
+  SFX.click();
+  const win = document.getElementById('chatWindow');
+  win.classList.toggle('hidden');
+}
+
+function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  socket.emit('chatMessage', { roomCode: currentRoom.code, text });
+  input.value = '';
+}
+
+socket.on('newChatMessage', ({ senderName, senderAvatar, text }) => {
+  const box = document.getElementById('chatMessages');
+  const msg = document.createElement('div');
+  msg.innerHTML = `<b>${senderAvatar} ${senderName}:</b> ${text}`;
+  box.appendChild(msg);
+  box.scrollTop = box.scrollHeight;
+});
+
+// সকেট লিসেনারস
 socket.on('roomJoined', ({ roomCode, myId: id }) => myId = id);
 socket.on('roleAssigned', (data) => isThief = data.isThief);
 socket.on('errorMsg', (msg) => alert(msg));
@@ -134,21 +170,6 @@ socket.on('globalFakeWarning', ({ blufferName }) => {
 
 socket.on('aimLaser', ({ fromId, toId }) => drawLaser(fromId, toId));
 
-socket.on('floatingEmoji', ({ emoji }) => {
-  const el = document.createElement('div');
-  el.className = 'flying-emoji';
-  el.innerText = emoji;
-  el.style.left = `${Math.random() * 80 + 10}%`;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2000);
-});
-
-socket.on('updateRoom', (room) => {
-  currentRoom = room;
-  renderUI(room);
-});
-
-// লেজার রশ্মি
 function drawLaser(fromId, toId) {
   const fromNode = document.querySelector(`.player-node[data-id="${fromId}"]`);
   const toNode = document.querySelector(`.player-node[data-id="${toId}"]`);
@@ -175,6 +196,11 @@ function drawLaser(fromId, toId) {
   setTimeout(() => line.remove(), 2500);
 }
 
+socket.on('updateRoom', (room) => {
+  currentRoom = room;
+  renderUI(room);
+});
+
 // UI রেন্ডার
 function renderUI(room) {
   document.getElementById('homeScreen').classList.add('hidden');
@@ -182,7 +208,13 @@ function renderUI(room) {
   document.getElementById('topScoreboardCard').classList.remove('hidden');
   document.getElementById('gameArenaScreen').classList.remove('hidden');
   document.getElementById('emojiDock').classList.remove('hidden');
+  document.getElementById('chatToggleBtn').classList.remove('hidden');
   document.getElementById('codeBadge').innerText = room.code;
+
+  // হোস্টের জন্য সার্বক্ষণিক গেম সমাপ্ত বাটন
+  const hostTopBtn = document.getElementById('hostEndMatchTopBtn');
+  if (room.hostId === myId) hostTopBtn.classList.remove('hidden');
+  else hostTopBtn.classList.add('hidden');
 
   if (room.status !== 'GESTURE') {
     document.getElementById('gestureReceivedBox').classList.add('hidden');
@@ -191,16 +223,16 @@ function renderUI(room) {
   // ১. লিডারবোর্ড টেবিল
   const tbody = document.getElementById('scoreTableBody');
   tbody.innerHTML = room.players.map(p => {
-    let state = 'অপেক্ষারত';
-    if (room.status === 'PREDICTION_PHASE') {
+    let state = p.connected ? 'সক্রিয়' : '❌ অফলাইন';
+    if (room.status === 'PREDICTION_PHASE' && p.connected) {
       const curTurnId = room.turnOrder[room.currentTurnIndex];
       if (p.id === curTurnId) state = '👉 অনুমান করছে...';
       else if (room.predictions[p.id]) state = `সন্দেহ: ${room.predictions[p.id].suspectName}`;
-    } else if (p.id === room.targetId && room.status !== 'GESTURE') {
+    } else if (p.id === room.targetId && room.status !== 'GESTURE' && p.connected) {
       state = '🍋 ইশারা পেয়েছে';
     }
     return `
-      <tr>
+      <tr style="opacity: ${p.connected ? 1 : 0.5};">
         <td><b>${p.avatar} ${p.name}</b> ${p.id === myId ? '(আপনি)' : ''}</td>
         <td style="color:var(--lemon); font-weight:bold; font-size:15px;">${p.score}</td>
         <td style="font-size:12px; color:var(--accent);">${state}</td>
@@ -212,10 +244,11 @@ function renderUI(room) {
   const circle = document.getElementById('arenaCircle');
   circle.querySelectorAll('.player-node').forEach(el => el.remove());
 
-  const total = room.players.length;
+  const activePlayers = room.players.filter(p => p.connected);
+  const total = activePlayers.length;
   const radius = 115;
 
-  room.players.forEach((p, idx) => {
+  activePlayers.forEach((p, idx) => {
     const angle = (idx / total) * (2 * Math.PI) - (Math.PI / 2);
     const x = 155 + radius * Math.cos(angle);
     const y = 155 + radius * Math.sin(angle);
@@ -270,7 +303,7 @@ function renderUI(room) {
   clearInterval(countdownTimer);
 
   if (room.status === 'LOBBY') {
-    instr.innerText = `লবি: খেলোয়াড় সংখ্যা (${room.players.length}/৩+)`;
+    instr.innerText = `লবি: খেলোয়াড় সংখ্যা (${activePlayers.length}/৩+)`;
     wheel.classList.remove('spinning');
     if (room.hostId === myId) startBtn.classList.remove('hidden');
   }
@@ -287,7 +320,7 @@ function renderUI(room) {
       instr.innerText = '🍋 আপনি লেবু চোর! কাউকে বাস্তবে ইশারা দিয়ে তাকে সিলেক্ট করুন:';
       selBox.classList.remove('hidden');
       selTitle.innerText = 'কাকে ইশারা দিয়েছেন? সিলেক্ট করুন:';
-      selBtns.innerHTML = room.players.filter(p => p.id !== myId).map(p => `
+      selBtns.innerHTML = activePlayers.filter(p => p.id !== myId).map(p => `
         <button class="btn-3d btn-secondary" onclick="selectTarget('${p.id}')">👉 ${p.avatar} ${p.name}</button>
       `).join('');
     } else {
@@ -308,7 +341,7 @@ function renderUI(room) {
       if (timeLeft <= 0) {
         clearInterval(countdownTimer);
         if (activeId === myId) {
-          const fallback = room.players.find(p => p.id !== myId);
+          const fallback = activePlayers.find(p => p.id !== myId);
           submitPrediction(fallback.id);
         }
       }
@@ -318,7 +351,7 @@ function renderUI(room) {
       instr.innerText = '🎯 আপনার পালা! কাকে চোর মনে হচ্ছে সিলেক্ট করুন:';
       selBox.classList.remove('hidden');
       selTitle.innerText = 'সন্দেহভাজন বেছে নিন:';
-      selBtns.innerHTML = room.players.filter(p => p.id !== myId).map(p => `
+      selBtns.innerHTML = activePlayers.filter(p => p.id !== myId).map(p => `
         <button class="btn-3d btn-secondary" onclick="submitPrediction('${p.id}')">🕵️ ${p.avatar} ${p.name}</button>
       `).join('');
     } else {
@@ -332,7 +365,7 @@ function renderUI(room) {
       instr.innerText = 'সবার অনুমান শেষ! আপনার চূড়ান্ত রায় দিন: আসল চোর কে?';
       selBox.classList.remove('hidden');
       selTitle.innerText = 'চূড়ান্ত রায় (আসল চোর):';
-      selBtns.innerHTML = room.players.filter(p => p.id !== myId).map(p => `
+      selBtns.innerHTML = activePlayers.filter(p => p.id !== myId).map(p => `
         <button class="btn-3d btn-warning" onclick="submitFinalVerdict('${p.id}')">🎯 ${p.avatar} ${p.name} আসল চোর!</button>
       `).join('');
     } else {

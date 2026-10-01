@@ -13,17 +13,16 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
 body { background: radial-gradient(circle at top, #1e293b, var(--bg)); color: var(--text); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 12px; overflow-x: hidden; }
-.container { width: 100%; max-width: 620px; display: flex; flex-direction: column; gap: 14px; position: relative; z-index: 10; }
+.container { width: 100%; max-width: 620px; display: flex; flex-direction: column; gap: 14px; position: relative; z-index: 10; margin-bottom: 50px; }
 
 /* গ্লাস প্যানেল */
 .glass-panel { background: var(--panel); backdrop-filter: blur(16px); border: 1px solid var(--border); border-radius: 24px; padding: 20px; text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.6); position: relative; }
 
-/* টপ বার ও ভয়েস কন্ট্রোল */
+/* টপ বার */
 .top-nav { display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.8); padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); }
 .room-pill { font-size: 13px; color: #94a3b8; }
 .room-pill span { color: var(--lemon); font-weight: bold; font-size: 15px; }
-.icon-btn { background: #1e293b; border: 1px solid #475569; color: white; padding: 6px 14px; border-radius: 20px; font-size: 13px; cursor: pointer; transition: 0.2s; }
-.icon-btn.active { background: var(--danger); border-color: #f87171; box-shadow: 0 0 12px rgba(239, 68, 68, 0.5); }
+.end-btn-pill { background: #7f1d1d; border: 1px solid #ef4444; color: #fca5a5; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; }
 
 /* টেবিল */
 table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; margin-top: 6px; }
@@ -45,37 +44,38 @@ td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .spinning { animation: spin 2.5s infinite linear; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* প্লেয়ার অবতার নোড */
+/* প্লেয়ার নোড */
 .player-node { position: absolute; width: 70px; height: 70px; border-radius: 50%; background: #0f172a; border: 2px solid #475569; display: flex; flex-direction: column; justify-content: center; align-items: center; transform: translate(-50%, -50%); cursor: pointer; user-select: none; transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
 .node-avatar { font-size: 22px; }
 .node-name { font-size: 11px; font-weight: bold; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ভয়েস ও টার্ন অ্যানিমেশন */
-.player-node.speaking { border-color: var(--success) !important; box-shadow: 0 0 20px var(--success), inset 0 0 10px var(--success) !important; animation: pulseSpeak 0.6s infinite alternate; }
-@keyframes pulseSpeak { from { transform: translate(-50%, -50%) scale(1); } to { transform: translate(-50%, -50%) scale(1.12); } }
 .player-node.active-turn { border-color: var(--accent); box-shadow: 0 0 20px var(--accent); transform: translate(-50%, -50%) scale(1.15); }
 .player-node.got-target { border-color: var(--lemon); background: #3a2e05; box-shadow: 0 0 25px var(--lemon); }
-
-/* লেজার অ্যারো লেয়ার */
 .laser-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
 
-/* ভাসমান ইমোজি ডক */
-.emoji-dock { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px); padding: 6px 14px; border-radius: 30px; border: 1px solid var(--border); z-index: 999; }
-.emoji-btn { background: none; border: none; font-size: 22px; cursor: pointer; transition: 0.15s; }
+/* সাইড ফ্লোটিং ইমোজি (ফিক্সড: লেখার উপর উঠবে না, সাইড দিয়ে যাবে) */
+.flying-emoji { position: fixed; bottom: 80px; font-size: 28px; pointer-events: none; opacity: 0.85; animation: flyUp 2s ease-out forwards; z-index: 9999; }
+@keyframes flyUp { 0% { transform: translateY(0) scale(0.6); opacity: 0.9; } 100% { transform: translateY(-380px) scale(1.2); opacity: 0; } }
+
+/* ইমোজি বার */
+.emoji-dock { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); padding: 6px 12px; border-radius: 30px; border: 1px solid var(--border); z-index: 999; max-width: 95vw; overflow-x: auto; }
+.emoji-btn { background: none; border: none; font-size: 20px; cursor: pointer; transition: 0.15s; }
 .emoji-btn:active { transform: scale(1.3); }
 
-/* ফ্লোটিং ইমোজি পার্টিকেল */
-.flying-emoji { position: fixed; bottom: 60px; font-size: 32px; pointer-events: none; animation: flyUp 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; z-index: 9999; }
-@keyframes flyUp { 0% { transform: translateY(0) scale(0.5); opacity: 1; } 100% { transform: translateY(-350px) scale(1.5); opacity: 0; } }
+/* লাইভ চ্যাটবক্স ড্রয়ার */
+.chat-toggle-btn { position: fixed; bottom: 65px; right: 15px; width: 45px; height: 45px; border-radius: 50%; background: var(--accent); border: none; font-size: 20px; cursor: pointer; box-shadow: 0 5px 15px rgba(56, 189, 248, 0.4); z-index: 1000; }
+.chat-window { position: fixed; bottom: 120px; right: 15px; width: 290px; height: 350px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: 16px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.8); z-index: 1001; }
+.chat-header { padding: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; font-weight: bold; font-size: 13px; color: var(--accent); }
+.chat-messages { flex: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: 12px; text-align: left; }
+.chat-input-bar { display: flex; border-top: 1px solid var(--border); padding: 6px; gap: 4px; }
+.chat-input-bar input { margin: 0; padding: 8px; font-size: 12px; }
+.chat-input-bar button { width: auto; margin: 0; padding: 6px 12px; font-size: 12px; }
 
 /* ট্রল ব্যানার */
 #globalAlert { position: fixed; top: 25px; left: 50%; transform: translateX(-50%); background: #b91c1c; color: white; padding: 14px 28px; border-radius: 40px; font-weight: 900; font-size: 15px; box-shadow: 0 10px 40px rgba(239, 68, 68, 0.8); border: 2px solid #fecaca; z-index: 999999; display: none; text-align: center; }
-
-/* কমন হেল্পার */
 .hidden { display: none !important; }
 .shake-screen { animation: screenShake 0.4s ease-in-out; }
 @keyframes screenShake { 0%, 100% { transform: translate(0, 0); } 20%, 60% { transform: translate(-10px, 6px); } 40%, 80% { transform: translate(10px, -6px); } }
-
 input { width: 100%; padding: 13px; border-radius: 12px; border: 2px solid var(--border); background: #0b1120; color: white; margin: 8px 0; outline: none; font-size: 15px; }
 input:focus { border-color: var(--lemon); }
 .timer-badge { font-weight: 800; color: var(--accent); margin: 6px 0; font-size: 16px; }

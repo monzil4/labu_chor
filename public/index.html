@@ -6,23 +6,21 @@
   <title>🍋 লেবু চোর - 3D Social Game</title>
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
-  <!-- ক্যানভাস কনফেটি -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
 
-<!-- গ্লোবাল ট্রল ব্যানার -->
 <div id="globalAlert"></div>
 
 <div class="container" id="mainApp">
 
-  <!-- টপ বার: রুম ইনফো -->
+  <!-- টপ বার -->
   <div class="top-nav hidden" id="topNav">
     <div class="room-pill">রুম কোড: <span id="codeBadge">----</span></div>
-    <div style="font-size: 13px; color: #94a3b8;">🍋 লেবু চোর অ্যারিনা</div>
+    <button id="hostEndMatchTopBtn" class="end-btn-pill hidden" onclick="endMatch()">🛑 খেলা সমাপ্ত</button>
   </div>
 
-  <!-- লাইভ লিডারবোর্ড টেবিল -->
+  <!-- লাইভ লিডারবোর্ড -->
   <div class="glass-panel hidden" id="topScoreboardCard">
     <div style="display:flex; justify-content:space-between; margin-bottom: 6px;">
       <span style="font-weight:bold; color:var(--lemon); font-size:15px;">🏆 লাইভ লিডারবোর্ড</span>
@@ -57,24 +55,19 @@
   <!-- ২. মূল এরিনা বোর্ড -->
   <div class="glass-panel hidden" id="gameArenaScreen">
     
-    <!-- সার্কুলার এরিনা -->
     <div class="arena-circle" id="arenaCircle">
       <svg id="laserSvg" class="laser-layer"></svg>
       <div class="center-wheel" id="centerWheel">🍋</div>
     </div>
 
-    <!-- ১৫ সেকেন্ডের টাইমার -->
     <div id="turnTimer" class="timer-badge hidden">⏳ <span id="timerSeconds">15</span>s</div>
 
-    <!-- ইশারা নোটিস -->
     <div id="gestureReceivedBox" style="background:rgba(250,204,21,0.2); border:2px solid var(--lemon); color:var(--lemon); padding:10px; border-radius:12px; font-weight:bold; margin-bottom:10px;" class="hidden"></div>
 
-    <!-- স্ট্যাটাস টেক্সট -->
     <div id="statusInstruction" style="font-size:15px; font-weight:bold; min-height:38px; color:var(--accent);">
       লবিতে অপেক্ষা করা হচ্ছে...
     </div>
 
-    <!-- অ্যাকশন কন্ট্রোলস -->
     <div id="actionArea">
       <button id="startGameBtn" class="btn-3d btn-primary hidden" onclick="startGame()">গেম শুরু করুন (হুইল ঘোরান) 🚀</button>
       
@@ -89,7 +82,7 @@
     </div>
   </div>
 
-  <!-- ৩. ম্যাচ ওভার ফাইনাল ট্রফি স্ক্রিন -->
+  <!-- ৩. ম্যাচ সমাপ্ত স্ক্রিন -->
   <div class="glass-panel hidden" id="matchEndedScreen">
     <div style="font-size: 60px; margin-bottom: 8px;">🏆</div>
     <h1 style="color:var(--lemon); font-size:30px; margin-bottom:10px;">খেলা সমাপ্ত!</h1>
@@ -97,13 +90,32 @@
     <button class="btn-3d btn-primary" onclick="location.reload()">হোমে ফিরে যান</button>
   </div>
 
-  <!-- ফ্লোটিং ইমোজি ডক -->
+  <!-- ফ্লোটিং ইমোজি ডক (১০টি ইমোজি) -->
   <div class="emoji-dock hidden" id="emojiDock">
     <button class="emoji-btn" onclick="sendEmoji('😂')">😂</button>
     <button class="emoji-btn" onclick="sendEmoji('🍋')">🍋</button>
     <button class="emoji-btn" onclick="sendEmoji('🕵️')">🕵️</button>
     <button class="emoji-btn" onclick="sendEmoji('🤫')">🤫</button>
     <button class="emoji-btn" onclick="sendEmoji('🔥')">🔥</button>
+    <button class="emoji-btn" onclick="sendEmoji('😱')">😱</button>
+    <button class="emoji-btn" onclick="sendEmoji('🤡')">🤡</button>
+    <button class="emoji-btn" onclick="sendEmoji('👀')">👀</button>
+    <button class="emoji-btn" onclick="sendEmoji('💀')">💀</button>
+    <button class="emoji-btn" onclick="sendEmoji('👏')">👏</button>
+  </div>
+
+  <!-- লাইভ চ্যাট বাটন ও উইন্ডো -->
+  <button id="chatToggleBtn" class="chat-toggle-btn hidden" onclick="toggleChat()">💬</button>
+  <div id="chatWindow" class="chat-window hidden">
+    <div class="chat-header">
+      <span>💬 ইন-গেম লাইভ চ্যাট</span>
+      <span style="cursor:pointer;" onclick="toggleChat()">✖</span>
+    </div>
+    <div id="chatMessages" class="chat-messages"></div>
+    <div class="chat-input-bar">
+      <input type="text" id="chatInput" placeholder="মেসেজ লিখুন..." maxlength="60" onkeydown="if(event.key==='Enter') sendChatMessage()">
+      <button class="btn-3d btn-primary" onclick="sendChatMessage()">পাঠান</button>
+    </div>
   </div>
 
 </div>

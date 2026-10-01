@@ -10,7 +10,7 @@ const io = new Server(server, { cors: { origin: '*' } });
 app.use(express.static(path.join(__dirname, 'public')));
 
 const rooms = {};
-const AVATARS = ['🍋', '🕵️', '😎', '🥸', '🐱', '🦊', '🐸', '🐼'];
+const AVATARS = ['🍋', '🕵️', '😎', '🥸', '🐱', '🦊', '🐸', '🐼', '👻', '🤡'];
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -20,8 +20,11 @@ function generateRoomCode() {
 }
 
 function initiateRound(room) {
-  const randIndex = Math.floor(Math.random() * room.players.length);
-  room.thiefId = room.players[randIndex].id;
+  const activePlayers = room.players.filter(p => p.connected);
+  if (activePlayers.length < 3) return io.to(room.code).emit('errorMsg', 'কমপক্ষে ৩ জন সক্রিয় প্লেয়ার লাগবে!');
+
+  const randIndex = Math.floor(Math.random() * activePlayers.length);
+  room.thiefId = activePlayers[randIndex].id;
   room.targetId = null;
   room.predictions = {};
   room.turnOrder = [];
@@ -49,7 +52,7 @@ io.on('connection', (socket) => {
     rooms[roomCode] = {
       code: roomCode,
       hostId: socket.id,
-      players: [{ id: socket.id, name, avatar: AVATARS[0], score: 0 }],
+      players: [{ id: socket.id, name, avatar: AVATARS[0], score: 0, connected: true }],
       status: 'LOBBY',
       thiefId: null,
       targetId: null,
@@ -63,17 +66,32 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('updateRoom', rooms[roomCode]);
   });
 
-  // ২. রুমে জয়েন
+  // ২. রুমে জয়েন (চলতি খেলায় যেকোনো সময় জয়েন এবং রিকানেক্ট সাপোর্ট)
   socket.on('joinRoom', ({ roomCode, name }) => {
     const code = roomCode?.trim().toUpperCase();
     const room = rooms[code];
     if (!room) return socket.emit('errorMsg', 'এই কোডের কোনো রুম নেই!');
-    if (room.status !== 'LOBBY') return socket.emit('errorMsg', 'খেলা ইতিমধ্যে চলছে!');
 
-    const avatar = AVATARS[room.players.length % AVATARS.length];
-    room.players.push({ id: socket.id, name, avatar, score: 0 });
-    socket.join(code);
-    socket.emit('roomJoined', { roomCode: code, myId: socket.id });
+    // পুরানো প্লেয়ার যদি রিফ্রেশ করে আবার আসে (নাম দিয়ে ম্যাচিং)
+    const existingPlayer = room.players.find(p => p.name.toLowerCase() === name.trim().toLowerCase());
+
+    if (existingPlayer) {
+      existingPlayer.id = socket.id;
+      existingPlayer.connected = true;
+      socket.join(code);
+      socket.emit('roomJoined', { roomCode: code, myId: socket.id });
+      // সে যদি চোর থাকে তবে আবার রোল পাঠিয়ে দেওয়া
+      if (room.thiefId === existingPlayer.id) {
+        socket.emit('roleAssigned', { isThief: true });
+      }
+    } else {
+      // নতুন প্লেয়ার যুক্ত হওয়া
+      const avatar = AVATARS[room.players.length % AVATARS.length];
+      room.players.push({ id: socket.id, name, avatar, score: 0, connected: true });
+      socket.join(code);
+      socket.emit('roomJoined', { roomCode: code, myId: socket.id });
+    }
+
     io.to(code).emit('updateRoom', room);
   });
 
@@ -81,7 +99,6 @@ io.on('connection', (socket) => {
   socket.on('startGame', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
-    if (room.players.length < 3) return socket.emit('errorMsg', 'কমপক্ষে ৩ জন প্লেয়ার লাগবে!');
     initiateRound(room);
   });
 
@@ -107,14 +124,15 @@ io.on('connection', (socket) => {
     if (room.targetId && room.targetId === socket.id) {
       room.status = 'PREDICTION_PHASE';
 
-      const targetIdx = room.players.findIndex(p => p.id === room.targetId);
-      const total = room.players.length;
+      const activePlayers = room.players.filter(p => p.connected);
+      const targetIdx = activePlayers.findIndex(p => p.id === room.targetId);
+      const total = activePlayers.length;
       room.turnOrder = [];
 
       for (let i = 1; i < total; i++) {
         const nextIdx = (targetIdx + i) % total;
-        if (room.players[nextIdx].id !== room.targetId) {
-          room.turnOrder.push(room.players[nextIdx].id);
+        if (activePlayers[nextIdx].id !== room.targetId) {
+          room.turnOrder.push(activePlayers[nextIdx].id);
         }
       }
       room.currentTurnIndex = 0;
@@ -200,7 +218,7 @@ io.on('connection', (socket) => {
     initiateRound(room);
   });
 
-  // ৯. ম্যাচ সম্পূর্ণ শেষ
+  // ৯. হোস্ট যেকোনো সময় খেলা সমাপ্ত করতে পারবে
   socket.on('endMatch', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -208,23 +226,36 @@ io.on('connection', (socket) => {
     io.to(room.code).emit('updateRoom', room);
   });
 
-  // ১০. লাইভ ইমোজি ব্রডকাস্ট
+  // ১০. লাইভ চ্যাট মেসেজ
+  socket.on('chatMessage', ({ roomCode, text }) => {
+    const room = rooms[roomCode];
+    if (!room) return;
+    const sender = room.players.find(p => p.id === socket.id);
+    if (!sender) return;
+    io.to(roomCode).emit('newChatMessage', {
+      senderName: sender.name,
+      senderAvatar: sender.avatar,
+      text: text
+    });
+  });
+
+  // ১১. লাইভ ইমোজি
   socket.on('sendEmoji', ({ roomCode, emoji }) => {
     io.to(roomCode).emit('floatingEmoji', { emoji });
   });
 
+  // ১২. প্লেয়ার ডিসকানেক্ট (হিস্ট্রি মুছে যাবে না, শুধু ডিসকানেক্টেড মার্ক হবে)
   socket.on('disconnect', () => {
     for (const code in rooms) {
       const room = rooms[code];
-      const idx = room.players.findIndex(p => p.id === socket.id);
-      if (idx !== -1) {
-        room.players.splice(idx, 1);
-        if (room.players.length === 0) {
-          delete rooms[code];
-        } else {
-          if (room.hostId === socket.id) room.hostId = room.players[0].id;
-          io.to(code).emit('updateRoom', room);
+      const player = room.players.find(p => p.id === socket.id);
+      if (player) {
+        player.connected = false; // হিস্ট্রি বা স্কোর থেকে যাবে
+        if (room.hostId === socket.id) {
+          const nextActive = room.players.find(p => p.connected);
+          if (nextActive) room.hostId = nextActive.id;
         }
+        io.to(code).emit('updateRoom', room);
         break;
       }
     }
@@ -233,5 +264,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`লেবু চোর সার্ভার চালু হয়েছে: http://localhost:${PORT}`);
+  console.log(`লেবু চোর সার্ভার চালু: http://localhost:${PORT}`);
 });
