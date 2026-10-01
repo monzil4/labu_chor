@@ -75,4 +75,51 @@ td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
   border: 1px solid rgba(56, 189, 248, 0.3); 
   border-radius: 14px; 
   display: flex; 
-  flex-direction: colum
+  flex-direction: column; 
+  box-shadow: 0 10px 25px rgba(0,0,0,0.8); 
+  z-index: 1001; 
+  touch-action: none;
+}
+.chat-header { 
+  padding: 6px 10px; 
+  border-bottom: 1px solid var(--border); 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  font-weight: bold; 
+  font-size: 11px; 
+  color: var(--accent); 
+  cursor: move; 
+  user-select: none; 
+  background: rgba(30, 41, 59, 0.85); 
+  border-radius: 14px 14px 0 0; 
+}
+.chat-messages { 
+  flex: 1; 
+  padding: 8px; 
+  overflow-y: auto; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 4px; 
+  font-size: 11px; 
+  text-align: left; 
+}
+.chat-input-bar { 
+  display: flex; 
+  border-top: 1px solid var(--border); 
+  padding: 4px; 
+  gap: 3px; 
+  background: rgba(11, 17, 32, 0.9);
+  border-radius: 0 0 14px 14px;
+}
+.chat-input-bar input { margin: 0; padding: 6px 8px; font-size: 11px; border-radius: 8px; }
+.chat-input-bar button { width: auto; margin: 0; padding: 4px 10px; font-size: 11px; border-radius: 8px; }
+
+/* ট্রল ব্যানার */
+#globalAlert { position: fixed; top: 25px; left: 50%; transform: translateX(-50%); background: #b91c1c; color: white; padding: 14px 28px; border-radius: 40px; font-weight: 900; font-size: 15px; box-shadow: 0 10px 40px rgba(239, 68, 68, 0.8); border: 2px solid #fecaca; z-index: 999999; display: none; text-align: center; }
+.hidden { display: none !important; }
+.shake-screen { animation: screenShake 0.4s ease-in-out; }
+@keyframes screenShake { 0%, 100% { transform: translate(0, 0); } 20%, 60% { transform: translate(-10px, 6px); } 40%, 80% { transform: translate(10px, -6px); } }
+input { width: 100%; padding: 13px; border-radius: 12px; border: 2px solid var(--border); background: #0b1120; color: white; margin: 8px 0; outline: none; font-size: 15px; }
+input:focus { border-color: var(--lemon); }
+.timer-badge { font-weight: 800; color: var(--accent); margin: 6px 0; font-size: 16px; }
