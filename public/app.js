@@ -12,6 +12,7 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playTone(freq, type = 'sine', duration = 0.15) {
   try {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = type;
@@ -51,25 +52,93 @@ const SFX = {
   }
 };
 
-// --- লাইভ ভয়েস চ্যাট ইঞ্জিন (WebRTC) ---
+// --- ১০০% কার্যকরী লাইভ ভয়েস ইঞ্জিন (WebRTC Audio Mesh) ---
 let localStream = null;
 let isMuted = true;
-const peerConnections = {};
+const peers = {}; // সব প্লেয়ারের অডিও কানেকশন এখানে থাকবে
+
+const rtcConfig = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]
+};
 
 async function initVoice() {
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    localStream.getAudioTracks()[0].enabled = false;
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    localStream.getAudioTracks()[0].enabled = false; // শুরুতে মিউট
     setupAudioAnalysis(localStream);
   } catch (e) {
-    console.log('মাইক্রোফোন পারমিশন পাওয়া যায়নি');
+    console.log('মাইক্রোফোন পারমিশন মেলেনি:', e);
   }
 }
+
+// নতুন প্লেয়ার আসলে তার সাথে কানেক্ট করা
+function connectToNewPeer(targetSocketId, isInitiator) {
+  if (peers[targetSocketId]) return;
+
+  const pc = new RTCPeerConnection(rtcConfig);
+  peers[targetSocketId] = pc;
+
+  // নিজের মাইক্রোফোনের অডিও পাঠানো
+  if (localStream) {
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  }
+
+  // অন্যের অডিও রিসিভ হলে অটোমেটিক স্পিকারে বাজানো
+  pc.ontrack = (event) => {
+    let remoteAudio = document.getElementById(`audio_${targetSocketId}`);
+    if (!remoteAudio) {
+      remoteAudio = document.createElement('audio');
+      remoteAudio.id = `audio_${targetSocketId}`;
+      remoteAudio.autoplay = true;
+      document.body.appendChild(remoteAudio);
+    }
+    remoteAudio.srcObject = event.streams[0];
+  };
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('voiceSignal', { to: targetSocketId, signal: { candidate: event.candidate } });
+    }
+  };
+
+  if (isInitiator) {
+    pc.onnegotiationneeded = async () => {
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('voiceSignal', { to: targetSocketId, signal: { desc: pc.localDescription } });
+      } catch (err) {}
+    };
+  }
+}
+
+// সিগন্যাল হ্যান্ডলার
+socket.on('voiceSignal', async ({ from, signal }) => {
+  if (!peers[from]) connectToNewPeer(from, false);
+  const pc = peers[from];
+
+  try {
+    if (signal.desc) {
+      await pc.setRemoteDescription(new RTCSessionDescription(signal.desc));
+      if (signal.desc.type === 'offer') {
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('voiceSignal', { to: from, signal: { desc: pc.localDescription } });
+      }
+    } else if (signal.candidate) {
+      await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+    }
+  } catch (err) {}
+});
 
 function toggleMic() {
   SFX.click();
   if (!localStream) {
-    initVoice();
+    initVoice().then(() => toggleMic());
     return;
   }
   const track = localStream.getAudioTracks()[0];
@@ -86,7 +155,7 @@ function toggleMic() {
   }
 }
 
-// কে কথা বলছে নির্ণয় করার সাউন্ডওয়েভ মিটার
+// সাউন্ড মিটার (কে কথা বলছে শনাক্ত করা)
 function setupAudioAnalysis(stream) {
   try {
     const src = audioCtx.createMediaStreamSource(stream);
@@ -104,7 +173,7 @@ function setupAudioAnalysis(stream) {
       let sum = 0;
       for (let i = 0; i < data.length; i++) sum += data[i];
       const avg = sum / data.length;
-      setSpeakingUI(myId, avg > 25);
+      setSpeakingUI(myId, avg > 20);
     }, 150);
   } catch (e) {}
 }
@@ -116,11 +185,11 @@ function setSpeakingUI(playerId, isSpeaking) {
   else node.classList.remove('speaking');
 }
 
-// --- ফ্রন্টএন্ড বাটন কলস ---
+// --- ফ্রন্টএন্ড বাটন কন্ট্রোলস ---
 function createRoom() {
   SFX.click();
   const name = document.getElementById('playerName').value.trim();
-  if (!name) return alert('অনুগ্রহ করে আপনার নাম দিন!');
+  if (!name) return alert('অনুগ্রহ করে নাম লিখুন!');
   socket.emit('createRoom', { name });
 }
 
@@ -128,7 +197,7 @@ function joinRoom() {
   SFX.click();
   const name = document.getElementById('playerName').value.trim();
   const roomCode = document.getElementById('roomCodeInput').value.trim();
-  if (!name || !roomCode) return alert('নাম এবং রুম কোড দুটোই লাগবে!');
+  if (!name || !roomCode) return alert('নাম ও রুম কোড উভয়ই লাগবে!');
   socket.emit('joinRoom', { roomCode, name });
 }
 
@@ -172,16 +241,13 @@ function sendEmoji(emoji) {
   socket.emit('sendEmoji', { roomCode: currentRoom.code, emoji });
 }
 
-// --- সকেট ইভেন্ট লিসেনার ---
-socket.on('roomJoined', ({ roomCode, myId: id }) => {
+// --- সকেট ইভেন্টস ---
+socket.on('roomJoined', async ({ roomCode, myId: id }) => {
   myId = id;
-  initVoice();
+  await initVoice();
 });
 
-socket.on('roleAssigned', (data) => {
-  isThief = data.isThief;
-});
-
+socket.on('roleAssigned', (data) => isThief = data.isThief);
 socket.on('errorMsg', (msg) => alert(msg));
 
 socket.on('youGotGesture', ({ thiefName }) => {
@@ -201,14 +267,10 @@ socket.on('globalFakeWarning', ({ blufferName }) => {
   alertBox.style.display = 'block';
 
   if (alertTimer) clearTimeout(alertTimer);
-  alertTimer = setTimeout(() => {
-    alertBox.style.display = 'none';
-  }, 3500);
+  alertTimer = setTimeout(() => alertBox.style.display = 'none', 3500);
 });
 
-socket.on('aimLaser', ({ fromId, toId }) => {
-  drawLaser(fromId, toId);
-});
+socket.on('aimLaser', ({ fromId, toId }) => drawLaser(fromId, toId));
 
 socket.on('floatingEmoji', ({ emoji }) => {
   const el = document.createElement('div');
@@ -221,10 +283,18 @@ socket.on('floatingEmoji', ({ emoji }) => {
 
 socket.on('updateRoom', (room) => {
   currentRoom = room;
+
+  // নতুন কোনো প্লেয়ার আসলে স্বয়ংক্রিয়ভাবে অডিও কানেকশন তৈরি
+  room.players.forEach(p => {
+    if (p.id !== myId && !peers[p.id]) {
+      connectToNewPeer(p.id, true);
+    }
+  });
+
   renderUI(room);
 });
 
-// --- লেজার রশ্মি আঁকার ইঞ্জিন ---
+// লেজার রশ্মি
 function drawLaser(fromId, toId) {
   const fromNode = document.querySelector(`.player-node[data-id="${fromId}"]`);
   const toNode = document.querySelector(`.player-node[data-id="${toId}"]`);
@@ -251,7 +321,7 @@ function drawLaser(fromId, toId) {
   setTimeout(() => line.remove(), 2500);
 }
 
-// --- সম্পূর্ণ UI রেন্ডারিং ---
+// UI রেন্ডার
 function renderUI(room) {
   document.getElementById('homeScreen').classList.add('hidden');
   document.getElementById('topNav').classList.remove('hidden');
@@ -284,7 +354,7 @@ function renderUI(room) {
     `;
   }).join('');
 
-  // ২. সার্কেল বোর্ড অবতার স্থাপন
+  // ২. সার্কেল এরিনা
   const circle = document.getElementById('arenaCircle');
   circle.querySelectorAll('.player-node').forEach(el => el.remove());
 
@@ -328,7 +398,7 @@ function renderUI(room) {
     circle.appendChild(node);
   });
 
-  // ৩. অ্যাকশন প্যানেল কন্ট্রোল
+  // ৩. কন্ট্রোল প্যানেল
   const instr = document.getElementById('statusInstruction');
   const startBtn = document.getElementById('startGameBtn');
   const claimBtn = document.getElementById('claimGestureBtn');
@@ -375,7 +445,6 @@ function renderUI(room) {
     const activeId = room.turnOrder[room.currentTurnIndex];
     const activePlayer = room.players.find(p => p.id === activeId);
 
-    // ১৫ সেকেন্ডের প্রেসার টাইমার চালু
     timerBadge.classList.remove('hidden');
     let timeLeft = 15;
     document.getElementById('timerSeconds').innerText = timeLeft;
@@ -385,7 +454,6 @@ function renderUI(room) {
       if (timeLeft <= 0) {
         clearInterval(countdownTimer);
         if (activeId === myId) {
-          // সময় শেষ হলে স্বয়ংক্রিয়ভাবে প্রথম প্লেয়ারকে সন্দেহ করে দেবে
           const fallback = room.players.find(p => p.id !== myId);
           submitPrediction(fallback.id);
         }
@@ -447,12 +515,10 @@ function renderUI(room) {
   }
 }
 
-// ম্যাচ সমাপ্তি স্ক্রিন ও কনফেটি
 function showMatchOverScreen(room) {
   document.getElementById('gameArenaScreen').classList.add('hidden');
   document.getElementById('matchEndedScreen').classList.remove('hidden');
 
-  // কনফেটি ব্লাস্ট
   try {
     confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
   } catch (e) {}
@@ -462,7 +528,7 @@ function showMatchOverScreen(room) {
   const loser = sorted[sorted.length - 1];
 
   document.getElementById('winnerPodium').innerHTML = `
-    <div style="font-size: 24px; margin-bottom: 8px;">👑 লেবু রাজা: <b style="color:var(--lemon);">${champ.name}</b> (${champ.score} পয়েন্ট)</div>
-    <div style="font-size: 15px; color:#f87171;">🤪 পাকা বোকা (লুজার): <b>${loser.name}</b> (${loser.score} পয়েন্ট)</div>
+    <div style="font-size: 22px; margin-bottom: 8px;">👑 লেবু রাজা: <b style="color:var(--lemon);">${champ.name}</b> (${champ.score} পয়েন্ট)</div>
+    <div style="font-size: 15px; color:#f87171;">🤪 পাকা বোকা: <b>${loser.name}</b> (${loser.score} পয়েন্ট)</div>
   `;
 }
