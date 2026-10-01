@@ -6,7 +6,7 @@ let isThief = false;
 let alertTimer = null;
 let countdownTimer = null;
 
-// সাউন্ড এফএক্স
+// সাউন্ড সিন্থেসাইজার
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playTone(freq, type = 'sine', duration = 0.15) {
   try {
@@ -50,7 +50,7 @@ const SFX = {
   }
 };
 
-// বাটন ফাংশন
+// ফ্রন্টএন্ড অ্যাকশনস
 function createRoom() {
   SFX.click();
   const name = document.getElementById('playerName').value.trim();
@@ -104,7 +104,7 @@ function endMatch() {
   }
 }
 
-// সাইড ফ্লোটিং ইমোজি (ডান বা বাঁ সাইড দিয়ে উঠবে, লেখার ওপর না)
+// সাইড ফ্লোটিং ইমোজি
 function sendEmoji(emoji) {
   socket.emit('sendEmoji', { roomCode: currentRoom.code, emoji });
 }
@@ -113,14 +113,13 @@ socket.on('floatingEmoji', ({ emoji }) => {
   const el = document.createElement('div');
   el.className = 'flying-emoji';
   el.innerText = emoji;
-  // স্ক্রিনের বাঁ পাশ (৫-১৫%) অথবা ডান পাশ (৮৫-৯৫%) দিয়ে উঠবে
   const isLeft = Math.random() > 0.5;
   el.style.left = isLeft ? `${Math.random() * 10 + 5}%` : `${Math.random() * 10 + 85}%`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2000);
 });
 
-// লাইভ চ্যাট কন্ট্রোল
+// লাইভ চ্যাট
 function toggleChat() {
   SFX.click();
   const win = document.getElementById('chatWindow');
@@ -143,7 +142,7 @@ socket.on('newChatMessage', ({ senderName, senderAvatar, text }) => {
   box.scrollTop = box.scrollHeight;
 });
 
-// সকেট লিসেনারস
+// সকেট লিসেনার্স
 socket.on('roomJoined', ({ roomCode, myId: id }) => myId = id);
 socket.on('roleAssigned', (data) => isThief = data.isThief);
 socket.on('errorMsg', (msg) => alert(msg));
@@ -211,7 +210,6 @@ function renderUI(room) {
   document.getElementById('chatToggleBtn').classList.remove('hidden');
   document.getElementById('codeBadge').innerText = room.code;
 
-  // হোস্টের জন্য সার্বক্ষণিক গেম সমাপ্ত বাটন
   const hostTopBtn = document.getElementById('hostEndMatchTopBtn');
   if (room.hostId === myId) hostTopBtn.classList.remove('hidden');
   else hostTopBtn.classList.add('hidden');
@@ -419,3 +417,65 @@ function showMatchOverScreen(room) {
     <div style="font-size: 15px; color:#f87171;">🤪 পাকা বোকা: <b>${loser.name}</b> (${loser.score} পয়েন্ট)</div>
   `;
 }
+
+// --- ফ্লোটিং ড্র্যাগেবল চ্যাটবক্স ইঞ্জিন ---
+(function makeChatDraggable() {
+  const chatWin = document.getElementById('chatWindow');
+  const chatHeader = chatWin.querySelector('.chat-header');
+
+  let isDragging = false;
+  let currentX, currentY, initialX, initialY;
+  let xOffset = 0, yOffset = 0;
+
+  function dragStart(e) {
+    if (e.target.tagName.toLowerCase() === 'span' && e.target.innerText === '✖') return;
+
+    if (e.type === "touchstart") {
+      initialX = e.touches[0].clientX - xOffset;
+      initialY = e.touches[0].clientY - yOffset;
+    } else {
+      initialX = e.clientX - xOffset;
+      initialY = e.clientY - yOffset;
+    }
+
+    if (e.target === chatHeader || chatHeader.contains(e.target)) {
+      isDragging = true;
+    }
+  }
+
+  function drag(e) {
+    if (!isDragging) return;
+    e.preventDefault();
+
+    if (e.type === "touchmove") {
+      currentX = e.touches[0].clientX - initialX;
+      currentY = e.touches[0].clientY - initialY;
+    } else {
+      currentX = e.clientX - initialX;
+      currentY = e.clientY - initialY;
+    }
+
+    xOffset = currentX;
+    yOffset = currentY;
+
+    setTranslate(currentX, currentY, chatWin);
+  }
+
+  function dragEnd() {
+    initialX = currentX;
+    initialY = currentY;
+    isDragging = false;
+  }
+
+  function setTranslate(xPos, yPos, el) {
+    el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
+  }
+
+  chatHeader.addEventListener("touchstart", dragStart, { passive: false });
+  document.addEventListener("touchmove", drag, { passive: false });
+  document.addEventListener("touchend", dragEnd, { passive: false });
+
+  chatHeader.addEventListener("mousedown", dragStart);
+  document.addEventListener("mousemove", drag);
+  document.addEventListener("mouseup", dragEnd);
+})();
