@@ -6,7 +6,7 @@ let isThief = false;
 let alertTimer = null;
 let countdownTimer = null;
 
-// --- অডিও সিন্থেসাইজার ইঞ্জিন ---
+// --- অডিও সিন্থেসাইজার ইঞ্জিন (SFX) ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playTone(freq, type = 'sine', duration = 0.15) {
@@ -51,151 +51,7 @@ const SFX = {
   }
 };
 
-// --- ফুলপ্রুফ লাইভ ভয়েস ইঞ্জিন (WebRTC) ---
-let localStream = null;
-let isMuted = true;
-const peers = {};
-
-const rtcConfig = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' }
-  ]
-};
-
-async function initVoice() {
-  try {
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
-    if (!localStream) {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      localStream.getAudioTracks()[0].enabled = false; // শুরুতে মিউট
-      setupAudioAnalysis(localStream);
-    }
-  } catch (e) {
-    console.log('মাইক্রোফোন চালু করা যায়নি:', e);
-  }
-}
-
-function createPeerConnection(targetId) {
-  const pc = new RTCPeerConnection(rtcConfig);
-  peers[targetId] = pc;
-
-  if (localStream) {
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-  }
-
-  // অডিও পাওয়ার সাথে সাথে জোরপূর্বক বাজানো (Autoplay bypass)
-  pc.ontrack = (event) => {
-    let audio = document.getElementById(`audio_${targetId}`);
-    if (!audio) {
-      audio = document.createElement('audio');
-      audio.id = `audio_${targetId}`;
-      audio.autoplay = true;
-      audio.playsInline = true;
-      document.body.appendChild(audio);
-    }
-    audio.srcObject = event.streams[0];
-    audio.play().catch(e => {
-      console.log('Autoplay restriction bypassed on interaction');
-    });
-  };
-
-  pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit('voiceSignal', { to: targetId, signal: { candidate: event.candidate } });
-    }
-  };
-
-  return pc;
-}
-
-// সিগন্যাল আদান প্রদান
-socket.on('voiceSignal', async ({ from, signal }) => {
-  let pc = peers[from];
-  if (!pc) pc = createPeerConnection(from);
-
-  try {
-    if (signal.desc) {
-      await pc.setRemoteDescription(new RTCSessionDescription(signal.desc));
-      if (signal.desc.type === 'offer') {
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit('voiceSignal', { to: from, signal: { desc: pc.localDescription } });
-      }
-    } else if (signal.candidate) {
-      await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-    }
-  } catch (err) {}
-});
-
-async function callUser(targetId) {
-  const pc = createPeerConnection(targetId);
-  try {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit('voiceSignal', { to: targetId, signal: { desc: pc.localDescription } });
-  } catch (e) {}
-}
-
-async function toggleMic() {
-  SFX.click();
-  if (!localStream) {
-    await initVoice();
-  }
-  
-  if (audioCtx.state === 'suspended') {
-    await audioCtx.resume();
-  }
-
-  // ব্রাউজারের অডিও চালু নিশ্চিত করা
-  document.querySelectorAll('audio').forEach(a => a.play().catch(() => {}));
-
-  const track = localStream.getAudioTracks()[0];
-  isMuted = !isMuted;
-  track.enabled = !isMuted;
-
-  const btn = document.getElementById('micBtn');
-  if (!isMuted) {
-    btn.classList.add('active');
-    btn.innerText = '🎙️ মাইক অন';
-  } else {
-    btn.classList.remove('active');
-    btn.innerText = '🎙️ মাইক অফ';
-  }
-}
-
-// সাউন্ড মিটার
-function setupAudioAnalysis(stream) {
-  try {
-    const src = audioCtx.createMediaStreamSource(stream);
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    src.connect(analyser);
-
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    setInterval(() => {
-      if (isMuted) {
-        setSpeakingUI(myId, false);
-        return;
-      }
-      analyser.getByteFrequencyData(data);
-      let sum = 0;
-      for (let i = 0; i < data.length; i++) sum += data[i];
-      const avg = sum / data.length;
-      setSpeakingUI(myId, avg > 15);
-    }, 150);
-  } catch (e) {}
-}
-
-function setSpeakingUI(playerId, isSpeaking) {
-  const node = document.querySelector(`.player-node[data-id="${playerId}"]`);
-  if (!node) return;
-  if (isSpeaking) node.classList.add('speaking');
-  else node.classList.remove('speaking');
-}
-
-// --- ফ্রন্টএন্ড বাটন কন্ট্রোল ---
+// --- ফ্রন্টএন্ড বাটন কন্ট্রোলস ---
 function createRoom() {
   SFX.click();
   const name = document.getElementById('playerName').value.trim();
@@ -252,11 +108,7 @@ function sendEmoji(emoji) {
 }
 
 // --- সকেট ইভেন্টস ---
-socket.on('roomJoined', async ({ roomCode, myId: id }) => {
-  myId = id;
-  await initVoice();
-});
-
+socket.on('roomJoined', ({ roomCode, myId: id }) => myId = id);
 socket.on('roleAssigned', (data) => isThief = data.isThief);
 socket.on('errorMsg', (msg) => alert(msg));
 
@@ -293,16 +145,6 @@ socket.on('floatingEmoji', ({ emoji }) => {
 
 socket.on('updateRoom', (room) => {
   currentRoom = room;
-
-  // যখনই কোনো প্লেয়ার যোগ দেবে, স্বয়ংক্রিয়ভাবে অডিও কানেকশন তৈরি
-  if (localStream) {
-    room.players.forEach(p => {
-      if (p.id !== myId && !peers[p.id]) {
-        callUser(p.id);
-      }
-    });
-  }
-
   renderUI(room);
 });
 

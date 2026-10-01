@@ -6,7 +6,7 @@
   <title>🍋 লেবু চোর - 3D Social Game</title>
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
-  <!-- ক্যানভাস কনফেটি লাইব্রেরি (ম্যাচ শেষে সেলিব্রেশনের জন্য) -->
+  <!-- ক্যানভাস কনফেটি -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
@@ -16,12 +16,10 @@
 
 <div class="container" id="mainApp">
 
-  <!-- টপ বার: ভয়েস কন্ট্রোল ও রুম ইনফো -->
+  <!-- টপ বার: রুম ইনফো -->
   <div class="top-nav hidden" id="topNav">
     <div class="room-pill">রুম কোড: <span id="codeBadge">----</span></div>
-    <div class="voice-dock">
-      <button class="icon-btn" id="micBtn" onclick="toggleMic()">🎙️ মাইক অফ</button>
-    </div>
+    <div style="font-size: 13px; color: #94a3b8;">🍋 লেবু চোর অ্যারিনা</div>
   </div>
 
   <!-- লাইভ লিডারবোর্ড টেবিল -->
@@ -65,10 +63,10 @@
       <div class="center-wheel" id="centerWheel">🍋</div>
     </div>
 
-    <!-- ১৫ সেকেন্ডের কাউন্টডাউন টাইমার -->
+    <!-- ১৫ সেকেন্ডের টাইমার -->
     <div id="turnTimer" class="timer-badge hidden">⏳ <span id="timerSeconds">15</span>s</div>
 
-    <!-- ইশারা নোটিস (শুধুমাত্র টার্গেট দেখতে পাবে) -->
+    <!-- ইশারা নোটিস -->
     <div id="gestureReceivedBox" style="background:rgba(250,204,21,0.2); border:2px solid var(--lemon); color:var(--lemon); padding:10px; border-radius:12px; font-weight:bold; margin-bottom:10px;" class="hidden"></div>
 
     <!-- স্ট্যাটাস টেক্সট -->
@@ -99,7 +97,7 @@
     <button class="btn-3d btn-primary" onclick="location.reload()">হোমে ফিরে যান</button>
   </div>
 
-  <!-- ফ্লোটিং ইমোজি ডক (স্ক্রিনের নিচে ভাসমান) -->
+  <!-- ফ্লোটিং ইমোজি ডক -->
   <div class="emoji-dock hidden" id="emojiDock">
     <button class="emoji-btn" onclick="sendEmoji('😂')">😂</button>
     <button class="emoji-btn" onclick="sendEmoji('🍋')">🍋</button>
@@ -110,7 +108,6 @@
 
 </div>
 
-<!-- স্ক্রিপ্ট লোড -->
 <script src="app.js"></script>
 </body>
 </html>
